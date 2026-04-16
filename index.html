@@ -1,0 +1,2291 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🚁 Simulation Drone Arduino</title>
+<style>
+  :root {
+    --navy:   #0D1B2A;
+    --blue:   #1B4F8A;
+    --cyan:   #00B4D8;
+    --teal:   #0096B7;
+    --light:  #F0F6FF;
+    --green:  #22C55E;
+    --red:    #EF4444;
+    --orange: #F97316;
+    --purple: #A855F7;
+    --gray:   #64748B;
+    --code-bg:#0D1117;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: var(--navy);
+    color: #E2EAF4;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: linear-gradient(135deg, #0D1B2A 0%, #1B4F8A 100%);
+    border-bottom: 3px solid var(--cyan);
+    padding: 18px 30px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  header .logo { font-size: 2.2rem; }
+  header h1 { font-size: 1.5rem; font-weight: 700; color: #fff; }
+  header h1 span { color: var(--cyan); }
+  header .badge {
+    margin-left: auto;
+    background: var(--cyan);
+    color: var(--navy);
+    font-size: 0.75rem; font-weight: 700;
+    padding: 4px 12px; border-radius: 20px;
+    letter-spacing: 1px;
+  }
+
+  /* ── MAIN GRID ── */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    grid-template-rows: auto auto;
+    gap: 16px;
+    padding: 16px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .panel {
+    background: #0F2233;
+    border: 1px solid #1E3A5F;
+    border-radius: 12px;
+    padding: 18px;
+    position: relative;
+  }
+  .panel-title {
+    font-size: 0.8rem; font-weight: 700; letter-spacing: 2px;
+    color: var(--cyan); text-transform: uppercase;
+    margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel-title::after {
+    content: ''; flex: 1; height: 1px; background: #1E3A5F;
+  }
+
+  /* ── SIMULATION AREA ── */
+  .sim-panel {
+    grid-row: span 2;
+  }
+
+  #simCanvas {
+    width: 100%;
+    height: 420px;
+    background: #060F1A;
+    border-radius: 10px;
+    border: 1px solid #1E3A5F;
+    display: block;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Sky gradient layers */
+  .sky {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, #060F1A 0%, #0D2040 60%, #1A3A60 100%);
+    overflow: hidden;
+  }
+  .ground {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 60px;
+    background: linear-gradient(180deg, #0A2A15 0%, #062010 100%);
+    border-top: 2px solid #22C55E33;
+  }
+  .ground-line {
+    position: absolute; bottom: 58px; left: 0; right: 0; height: 1px;
+    background: #22C55E44;
+  }
+  /* Stars */
+  .star {
+    position: absolute;
+    width: 2px; height: 2px;
+    background: #fff;
+    border-radius: 50%;
+    animation: twinkle var(--d,2s) infinite alternate;
+  }
+  @keyframes twinkle { from{opacity:.3} to{opacity:1} }
+
+  /* Grid lines (holographic) */
+  .grid-lines {
+    position: absolute; bottom: 60px; left: 0; right: 0;
+    display: flex; flex-direction: column; gap: 30px;
+    opacity: 0.1;
+  }
+  .grid-line { height: 1px; background: var(--cyan); }
+
+  /* Altitude indicator */
+  .altitude-bar {
+    position: absolute; left: 14px; top: 20px; bottom: 80px;
+    width: 28px;
+    background: #0D2040;
+    border: 1px solid #1E3A5F;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .altitude-fill {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(180deg, var(--cyan) 0%, #0056AA 100%);
+    transition: height 0.3s;
+  }
+  .altitude-label {
+    position: absolute; left: 14px; bottom: 65px;
+    font-size: 0.65rem; color: var(--cyan); font-weight: 700;
+    writing-mode: vertical-lr; transform: rotate(180deg);
+    letter-spacing: 1px;
+  }
+
+  /* DRONE */
+  #drone-wrapper {
+    position: absolute;
+    left: 50%; bottom: 80px;
+    transform: translateX(-50%);
+    transition: bottom 0.3s, left 0.3s;
+    width: 140px; height: 140px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .drone-body {
+    position: relative;
+    width: 140px; height: 140px;
+  }
+
+  /* Arms */
+  .arm {
+    position: absolute;
+    width: 60px; height: 6px;
+    background: linear-gradient(90deg, #1E3A5F, #2A5A8F);
+    border-radius: 3px;
+    transform-origin: center center;
+  }
+  .arm-tl { top: 30px; left: 10px;  transform: rotate(-45deg); }
+  .arm-tr { top: 30px; right: 10px; transform: rotate(45deg);  }
+  .arm-bl { bottom: 30px; left: 10px;  transform: rotate(45deg);  }
+  .arm-br { bottom: 30px; right: 10px; transform: rotate(-45deg); }
+
+  /* Central body */
+  .drone-center {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 42px; height: 42px;
+    background: linear-gradient(135deg, #1B4F8A, #0D2A50);
+    border: 2px solid var(--cyan);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem;
+    box-shadow: 0 0 20px var(--cyan)44;
+  }
+
+  /* Motors */
+  .motor {
+    position: absolute;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.6rem; font-weight: 700;
+    transition: all 0.2s;
+  }
+  .motor-m1 { top: 4px; left: 4px; }
+  .motor-m2 { top: 4px; right: 4px; }
+  .motor-m3 { bottom: 4px; left: 4px; }
+  .motor-m4 { bottom: 4px; right: 4px; }
+
+  .motor.off {
+    background: #1A3A5F;
+    border: 2px solid #2A5A8F;
+    color: #4A7AAF;
+  }
+  .motor.on {
+    background: radial-gradient(circle, var(--cyan)44 0%, var(--teal) 100%);
+    border: 2px solid var(--cyan);
+    color: #fff;
+    box-shadow: 0 0 12px var(--cyan)88;
+  }
+
+  /* Propeller */
+  .propeller {
+    position: absolute; inset: -4px;
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .propeller-blade {
+    position: absolute;
+    width: 38px; height: 4px;
+    background: var(--cyan);
+    top: 50%; left: 50%;
+    transform-origin: left center;
+    border-radius: 2px;
+    opacity: 0;
+  }
+  .motor.on .propeller { animation: spin 0.15s linear infinite; }
+  .motor.on .propeller-blade { opacity: 0.6; }
+
+  @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
+  /* Drone tilt */
+  #drone-wrapper.tilt-left  { transform: translateX(-50%) rotate(-12deg); }
+  #drone-wrapper.tilt-right { transform: translateX(-50%) rotate(12deg); }
+  #drone-wrapper.tilt-up    { transform: translateX(-50%) rotate(-5deg) translateY(-3px); }
+
+  /* Thrust particles */
+  .particle {
+    position: absolute;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--cyan);
+    pointer-events: none;
+    animation: floatUp 1s ease-out forwards;
+  }
+  @keyframes floatUp {
+    from { opacity: 0.8; transform: translateY(0) scale(1); }
+    to   { opacity: 0;   transform: translateY(-40px) scale(0.2); }
+  }
+
+  /* Status HUD */
+  .hud {
+    position: absolute;
+    top: 14px; right: 14px;
+    background: #0D2040CC;
+    border: 1px solid #1E3A5F;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.75rem;
+    backdrop-filter: blur(4px);
+  }
+  .hud-row { display: flex; gap: 16px; margin-bottom: 4px; }
+  .hud-item label { color: var(--gray); margin-right: 4px; }
+  .hud-item value { color: var(--cyan); font-weight: 700; }
+
+  /* State badge */
+  .state-badge {
+    position: absolute;
+    top: 14px; left: 60px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem; font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.3s;
+  }
+  .state-badge.idle    { background: #1E3A5F; color: var(--gray); }
+  .state-badge.flying  { background: var(--green)22; color: var(--green); border: 1px solid var(--green); }
+  .state-badge.turning { background: var(--cyan)22; color: var(--cyan); border: 1px solid var(--cyan); }
+  .state-badge.landing { background: var(--orange)22; color: var(--orange); border: 1px solid var(--orange); }
+
+  /* Motor status below canvas */
+  .motor-status {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 10px; margin-top: 14px;
+  }
+  .motor-card {
+    background: #060F1A;
+    border: 1px solid #1E3A5F;
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex; align-items: center; gap: 10px;
+    transition: all 0.2s;
+  }
+  .motor-card.active {
+    border-color: var(--cyan);
+    background: #061828;
+    box-shadow: 0 0 10px var(--cyan)22;
+  }
+  .motor-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #1E3A5F;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .motor-card.active .motor-dot {
+    background: var(--cyan);
+    box-shadow: 0 0 8px var(--cyan);
+  }
+  .motor-card .label { font-size: 0.85rem; font-weight: 700; color: #E2EAF4; }
+  .motor-card .sublabel { font-size: 0.7rem; color: var(--gray); }
+  .motor-card .status-text {
+    margin-left: auto;
+    font-size: 0.7rem; font-weight: 700;
+    color: var(--gray);
+  }
+  .motor-card.active .status-text { color: var(--green); }
+
+  /* ── REMOTE CONTROL ── */
+  .remote {
+    background: #080E18;
+    border: 2px solid #1E3A5F;
+    border-radius: 20px;
+    padding: 20px;
+    position: relative;
+  }
+  .remote::before {
+    content: '';
+    position: absolute; top: -1px; left: 30px; right: 30px; height: 3px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    border-radius: 2px;
+  }
+
+  /* D-pad */
+  .dpad {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    gap: 6px;
+    width: 170px;
+    margin: 0 auto 16px;
+  }
+  .btn {
+    background: #0F1E30;
+    border: 1.5px solid #2A4A70;
+    border-radius: 8px;
+    color: #A0C4E8;
+    font-size: 1.4rem;
+    height: 52px;
+    cursor: pointer;
+    transition: all 0.12s;
+    display: flex; align-items: center; justify-content: center;
+    user-select: none;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn:hover { background: #1A3050; border-color: var(--cyan); color: #fff; }
+  .btn.active, .btn:active {
+    background: var(--cyan)22;
+    border-color: var(--cyan);
+    color: var(--cyan);
+    box-shadow: 0 0 14px var(--cyan)44;
+    transform: scale(0.96);
+  }
+  .btn .key-hint {
+    position: absolute; bottom: 2px; right: 4px;
+    font-size: 0.55rem; color: #3A6A9A; font-family: monospace;
+  }
+  .btn-up    { grid-column: 2; }
+  .btn-left  { grid-column: 1; grid-row: 2; }
+  .btn-stop  { grid-column: 2; grid-row: 2; background: #1A0A0A; border-color: #5A1A1A; }
+  .btn-stop:hover { border-color: var(--red); color: var(--red); }
+  .btn-stop.active { background: var(--red)22; border-color: var(--red); color: var(--red); }
+  .btn-right { grid-column: 3; grid-row: 2; }
+  .btn-down  { grid-column: 2; grid-row: 3; }
+
+  /* Throttle */
+  .throttle-section {
+    display: flex; gap: 14px; align-items: center;
+    background: #0A1520;
+    border: 1px solid #1E3A5F;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 14px;
+  }
+  .throttle-label { font-size: 0.7rem; color: var(--gray); text-align: center; }
+  .throttle-bar {
+    flex: 1; height: 8px;
+    background: #1E3A5F;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .throttle-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--teal), var(--cyan));
+    border-radius: 4px;
+    transition: width 0.3s;
+    width: 0%;
+  }
+  .throttle-val { font-size: 0.85rem; font-weight: 700; color: var(--cyan); min-width: 36px; text-align: right; }
+
+  /* Extra buttons */
+  .extra-btns {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 8px; margin-bottom: 12px;
+  }
+  .btn-extra {
+    padding: 10px;
+    background: #0F1E30;
+    border: 1.5px solid #2A4A70;
+    border-radius: 8px;
+    color: #A0C4E8;
+    font-size: 0.78rem; font-weight: 700;
+    cursor: pointer;
+    transition: all 0.12s;
+    text-align: center;
+  }
+  .btn-extra:hover { background: #1A3050; border-color: var(--cyan); color: var(--cyan); }
+  .btn-extra.green { border-color: #22C55E44; }
+  .btn-extra.green:hover { border-color: var(--green); color: var(--green); background: #022010; }
+  .btn-extra.red { border-color: #EF444444; }
+  .btn-extra.red:hover { border-color: var(--red); color: var(--red); background: #200A0A; }
+
+  /* Keyboard hint */
+  .keyboard-hint {
+    background: #060F1A;
+    border: 1px dashed #1E3A5F;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 0.7rem;
+    color: var(--gray);
+    text-align: center;
+  }
+  .keyboard-hint span { color: var(--cyan); }
+
+  /* ── CODE PANEL ── */
+  .code-panel { grid-column: 1 / -1; }
+
+  .code-tabs {
+    display: flex; gap: 4px;
+    margin-bottom: 14px;
+  }
+  .tab {
+    padding: 6px 14px;
+    border-radius: 6px 6px 0 0;
+    font-size: 0.78rem; font-weight: 700;
+    cursor: pointer;
+    background: #060F1A;
+    color: var(--gray);
+    border: 1px solid #1E3A5F;
+    border-bottom: none;
+    transition: all 0.15s;
+  }
+  .tab.active { background: var(--code-bg); color: var(--cyan); border-color: var(--cyan); }
+
+  .code-area {
+    background: var(--code-bg);
+    border: 1px solid #30363D;
+    border-radius: 0 10px 10px 10px;
+    padding: 20px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.82rem;
+    line-height: 1.8;
+    overflow-x: auto;
+    position: relative;
+  }
+  .code-area .file-bar {
+    position: absolute; top: 0; left: 0; right: 0;
+    background: #161B22;
+    border-bottom: 1px solid #30363D;
+    padding: 6px 16px;
+    font-size: 0.72rem;
+    color: #8B949E;
+    border-radius: 0 10px 0 0;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot-red { background: #FF5F57; }
+  .dot-yellow { background: #FEBC2E; }
+  .dot-green { background: #28C840; }
+  pre { margin-top: 22px; }
+
+  /* Syntax highlighting */
+  .kw  { color: #79C0FF; }
+  .fn  { color: #D2A8FF; }
+  .num { color: #F0883E; }
+  .str { color: #A5D6FF; }
+  .cmt { color: #8B949E; font-style: italic; }
+  .var { color: #E6EDF3; }
+  .op  { color: #E6EDF3; }
+  .pin { color: var(--cyan); font-weight: bold; }
+
+  /* Execution highlight */
+  .exec-line {
+    display: inline-block;
+    width: 100%;
+    transition: background 0.3s;
+  }
+  .exec-line.running {
+    background: var(--cyan)18;
+    border-left: 3px solid var(--cyan);
+    padding-left: 4px;
+    animation: pulse 0.5s ease-in-out;
+  }
+  @keyframes pulse { 0%{background: var(--cyan)40} 100%{background: var(--cyan)18} }
+
+  /* Serial monitor */
+  .serial-monitor {
+    background: #020608;
+    border: 1px solid #30363D;
+    border-radius: 8px;
+    padding: 14px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    height: 140px;
+    overflow-y: auto;
+    margin-top: 14px;
+  }
+  .serial-line {
+    color: #00FF41;
+    margin-bottom: 2px;
+    animation: fadeIn 0.3s ease;
+  }
+  .serial-line.info { color: var(--cyan); }
+  .serial-line.warn { color: var(--orange); }
+  @keyframes fadeIn { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
+
+  /* ── TINKERCAD GUIDE TOGGLE BUTTON ── */
+  .tinkercad-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 14px 24px;
+    background: linear-gradient(135deg, #0F2233, #1B4F8A);
+    border: 2px solid var(--cyan);
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--cyan);
+    margin: 0 16px 16px;
+    transition: all 0.2s;
+    text-align: center;
+    max-width: 1400px;
+    margin: 0 auto 16px;
+    width: calc(100% - 32px);
+  }
+  .tinkercad-toggle:hover {
+    background: linear-gradient(135deg, #1B4F8A, #0096B7);
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px var(--cyan)33;
+  }
+  .tinkercad-toggle .toggle-icon { font-size: 1.5rem; }
+  .tinkercad-toggle .toggle-text small { display: block; font-size: 0.75rem; font-weight: 400; color: #A0C4E8; margin-top: 2px; }
+  .tinkercad-toggle .toggle-arrow { margin-left: auto; transition: transform 0.3s; }
+  .tinkercad-toggle.open .toggle-arrow { transform: rotate(180deg); }
+
+  /* ── STEPPER ── */
+  .stepper {
+    display: flex; align-items: center;
+    margin-bottom: 24px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .step {
+    display: flex; flex-direction: column; align-items: center;
+    cursor: pointer; transition: all 0.2s;
+    min-width: 90px;
+  }
+  .step-num {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: #1E3A5F;
+    border: 2px solid #2A5A8F;
+    color: var(--gray);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 1rem;
+    transition: all 0.2s;
+  }
+  .step.active .step-num, .step.done .step-num {
+    background: var(--cyan);
+    border-color: var(--cyan);
+    color: var(--navy);
+  }
+  .step.done .step-num { background: var(--teal); }
+  .step-label {
+    font-size: 0.68rem; color: var(--gray);
+    margin-top: 5px; text-align: center;
+    transition: color 0.2s;
+  }
+  .step.active .step-label { color: var(--cyan); font-weight: 700; }
+  .step-line {
+    flex: 1; height: 2px;
+    background: #1E3A5F;
+    min-width: 20px;
+    margin-bottom: 20px;
+    transition: background 0.3s;
+  }
+
+  /* ── STEP PAGES ── */
+  .step-page { display: none; animation: fadeInStep 0.3s ease; }
+  .step-page.active { display: block; }
+  @keyframes fadeInStep { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+  .step-header {
+    display: flex; align-items: flex-start; gap: 16px;
+    background: #060F1A; border: 1px solid #1E3A5F;
+    border-radius: 10px; padding: 16px 20px;
+    margin-bottom: 20px;
+  }
+  .step-icon { font-size: 2rem; }
+  .step-header h2 { font-size: 1.15rem; color: #fff; margin-bottom: 4px; }
+  .step-sub { font-size: 0.8rem; color: var(--gray); }
+  .tinkercad-btn {
+    margin-left: auto;
+    padding: 8px 16px;
+    background: var(--cyan);
+    color: var(--navy);
+    font-weight: 700; font-size: 0.8rem;
+    border-radius: 8px;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+  .tinkercad-btn:hover { background: #fff; }
+
+  .step-body {
+    display: flex; gap: 20px;
+  }
+
+  /* ── INSTRUCTIONS ── */
+  .instructions { flex: 1; }
+  .instr-item {
+    display: flex; gap: 14px;
+    margin-bottom: 14px;
+    background: #060F1A;
+    border: 1px solid #1E3A5F;
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .instr-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--cyan);
+    color: var(--navy);
+    font-weight: 700; font-size: 0.9rem;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .instr-text { font-size: 0.85rem; line-height: 1.6; color: #C8D8E8; }
+  .instr-text strong { color: #fff; }
+
+  /* ── DIAGRAM BOX ── */
+  .diagram-box {
+    flex: 1;
+    background: #060F1A;
+    border: 1px solid #1E3A5F;
+    border-radius: 10px;
+    padding: 16px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .diagram-title {
+    font-size: 0.78rem; font-weight: 700;
+    color: var(--cyan); letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+
+  /* ── TINKERCAD MOCKUP ── */
+  .tink-diagram {
+    background: #1A1A2E;
+    border: 1px solid #333;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .tink-toolbar {
+    background: #252535;
+    padding: 6px 12px;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.78rem;
+  }
+  .tink-logo {
+    background: #1CB0F6;
+    color: #fff;
+    font-weight: 900; font-size: 0.9rem;
+    width: 24px; height: 24px;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tink-badge {
+    margin-left: auto;
+    background: var(--green);
+    color: #fff; font-size: 0.6rem;
+    padding: 2px 6px; border-radius: 10px; font-weight: 700;
+  }
+  .tink-main { display: flex; min-height: 100px; }
+  .tink-sidebar {
+    width: 110px; background: #1E1E30;
+    padding: 8px 0; font-size: 0.72rem;
+  }
+  .tink-menu {
+    padding: 7px 12px; color: #888; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tink-menu.active { background: #2A2A40; color: #1CB0F6; }
+  .tink-workspace {
+    flex: 1; padding: 10px; display: flex;
+    flex-wrap: wrap; gap: 8px; align-content: flex-start;
+  }
+  .tink-new-btn {
+    width: 100%;
+    padding: 8px;
+    background: #1CB0F6;
+    color: #fff; font-size: 0.72rem; font-weight: 700;
+    border-radius: 6px; text-align: center; cursor: pointer;
+  }
+  .tink-card {
+    padding: 6px 10px;
+    background: #252540;
+    border: 1px solid #333;
+    border-radius: 6px;
+    font-size: 0.7rem; color: #ccc;
+  }
+  .tink-card.dim { opacity: 0.5; }
+
+  /* ── ARDUINO DIAGRAM ── */
+  .arduino-diagram { display: flex; justify-content: center; }
+  .arduino-card {
+    background: #1A3A1A;
+    border: 2px solid #2A6A2A;
+    border-radius: 8px;
+    padding: 10px;
+    min-width: 240px;
+  }
+  .arduino-top {
+    text-align: center; font-size: 0.7rem; font-weight: 700;
+    color: #5A9A5A; letter-spacing: 2px; margin-bottom: 8px;
+  }
+  .arduino-pins { display: flex; align-items: center; gap: 8px; }
+  .pin-group { display: flex; flex-direction: column; gap: 4px; }
+  .pin-row { display: flex; align-items: center; gap: 4px; font-size: 0.72rem; }
+  .pin-num {
+    background: #2A5A2A;
+    color: #7ACA7A;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-weight: 700;
+    font-family: monospace;
+  }
+  .pin-num.active { background: var(--cyan); color: var(--navy); }
+  .pin-num.inactive { background: #1A2A1A; color: #3A5A3A; }
+  .pin-wire { font-family: monospace; color: #3A6A3A; }
+  .pin-wire.vcc { color: #FF6B6B; }
+  .pin-wire.gnd { color: #888; }
+  .pin-wire.motor-pin { color: var(--cyan); }
+  .pin-wire.dim { color: #2A3A2A; }
+  .pin-lbl { font-size: 0.68rem; font-weight: 700; color: var(--cyan); }
+  .pin-lbl.dim { color: #2A4A2A; }
+  .arduino-body {
+    flex: 1; text-align: center; font-size: 1.8rem;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ── LAYOUT DIAGRAM ── */
+  .layout-diagram {
+    position: relative;
+    height: 200px;
+    background: #0A1520;
+    border: 1px dashed #1E3A5F;
+    border-radius: 8px;
+  }
+  .comp {
+    position: absolute;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+  }
+  .comp-icon { font-size: 1.4rem; }
+  .comp-lbl { font-size: 0.62rem; color: var(--cyan); text-align: center; }
+  .m1-pos { top: 15px; left: 15px; }
+  .m2-pos { top: 15px; right: 15px; }
+  .m3-pos { bottom: 15px; left: 15px; }
+  .m4-pos { bottom: 15px; right: 15px; }
+  .center-pos { top: 50%; left: 50%; transform: translate(-50%,-50%); }
+  .conn-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+  /* ── CONNECTIONS TABLE ── */
+  .conn-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 0.78rem;
+  }
+  .conn-table th {
+    background: var(--navy);
+    color: var(--cyan); padding: 7px 10px;
+    text-align: left; font-size: 0.72rem; letter-spacing: 1px;
+  }
+  .conn-table td { padding: 7px 10px; border-bottom: 1px solid #1E3A5F; }
+  .conn-table tr:nth-child(even) td { background: #060F1A; }
+  .conn-table .gnd-row td { background: #0A0A0F; }
+  .pin-badge {
+    background: var(--cyan); color: var(--navy);
+    font-weight: 700; font-size: 0.72rem;
+    padding: 2px 7px; border-radius: 4px;
+    font-family: monospace;
+  }
+  .gnd-badge {
+    background: #333; color: #fff;
+    font-weight: 700; font-size: 0.72rem;
+    padding: 2px 7px; border-radius: 4px;
+  }
+  .wire-color {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    vertical-align: middle;
+    margin-right: 5px;
+  }
+
+  /* ── TIP / WARN BOX ── */
+  .tip-box {
+    background: var(--cyan)10;
+    border: 1px solid var(--cyan)44;
+    border-left: 3px solid var(--cyan);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 0.78rem;
+    color: #C8D8E8;
+    line-height: 1.5;
+  }
+  .tip-box.warn {
+    background: var(--orange)10;
+    border-color: var(--orange)44;
+    border-left-color: var(--orange);
+  }
+
+  /* ── CODE BLOCK ── */
+  .tink-code-block {
+    background: var(--code-bg);
+    border: 1px solid #30363D;
+    border-radius: 8px;
+    padding: 16px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    line-height: 1.75;
+    overflow: auto;
+    max-height: 460px;
+    position: relative;
+  }
+  .tink-code-bar {
+    position: absolute; top: 0; left: 0; right: 0;
+    background: #161B22;
+    border-bottom: 1px solid #30363D;
+    padding: 5px 12px;
+    display: flex; align-items: center; gap: 6px;
+    border-radius: 8px 8px 0 0;
+  }
+  .copy-btn {
+    padding: 5px 12px;
+    background: #1E3A5F;
+    border: 1px solid var(--cyan)44;
+    border-radius: 6px;
+    color: var(--cyan); font-size: 0.75rem; font-weight: 700;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .copy-btn:hover { background: var(--cyan); color: var(--navy); }
+
+  /* ── SERIAL EXPECTED ── */
+  .serial-expected {
+    background: #020608;
+    border: 1px solid #1E3A5F;
+    border-radius: 6px;
+    padding: 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+  }
+  .se-line { padding: 2px 0; }
+  .se-line.info  { color: var(--cyan); }
+  .se-line.green { color: var(--green); }
+  .se-line.yellow{ color: var(--orange); }
+  .se-line.red   { color: var(--red); }
+
+  /* ── CHECKLIST ── */
+  .checklist {
+    background: #060F1A;
+    border: 1px solid #1E3A5F;
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .check-title {
+    font-size: 0.78rem; font-weight: 700;
+    color: var(--cyan); margin-bottom: 8px;
+  }
+  .check-item {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.8rem; color: #C8D8E8;
+    margin-bottom: 6px; cursor: pointer;
+    transition: color 0.15s;
+  }
+  .check-item:hover { color: #fff; }
+  .check-item input { accent-color: var(--cyan); width: 15px; height: 15px; }
+
+  /* ── BADGES ── */
+  .badge-green {
+    background: var(--green)22;
+    color: var(--green);
+    border: 1px solid var(--green);
+    padding: 2px 8px; border-radius: 4px;
+    font-size: 0.78rem;
+  }
+  .badge-orange {
+    background: var(--orange)22;
+    color: var(--orange);
+    border: 1px solid var(--orange);
+    padding: 2px 8px; border-radius: 4px;
+    font-size: 0.78rem;
+  }
+  .badge-red {
+    background: var(--red)22;
+    color: var(--red);
+    border: 1px solid var(--red);
+    padding: 2px 8px; border-radius: 4px;
+    font-size: 0.78rem;
+  }
+
+  /* ── STEP NAV ── */
+  .step-nav {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 20px; padding-top: 14px;
+    border-top: 1px solid #1E3A5F;
+  }
+  .nav-btn {
+    padding: 10px 20px;
+    background: var(--cyan);
+    color: var(--navy);
+    font-weight: 700; font-size: 0.85rem;
+    border: none; border-radius: 8px;
+    cursor: pointer; text-decoration: none;
+    display: inline-block;
+    transition: all 0.15s;
+  }
+  .nav-btn:hover { background: #fff; transform: translateY(-1px); }
+  .nav-btn.secondary {
+    background: #1E3A5F;
+    color: var(--cyan);
+    border: 1px solid var(--cyan)44;
+  }
+  .nav-btn.secondary:hover { background: #2A5A8F; color: #fff; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+    .sim-panel { grid-row: span 1; }
+    .step-body { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🚁</div>
+  <h1>Simulation <span>Drone Arduino</span></h1>
+  <div class="badge">SIMULATION INTERACTIVE</div>
+</header>
+
+<button class="tinkercad-toggle" id="tinkercadToggle" onclick="toggleTinkercad()">
+  <span class="toggle-icon">🧪</span>
+  <div class="toggle-text">
+    Guide de réalisation sur Tinkercad
+    <small>Circuit + Programme — Guide pas à pas interactif</small>
+  </div>
+  <span class="toggle-arrow">▼</span>
+</button>
+
+<div class="grid">
+
+  <!-- ══ SIMULATION ══ -->
+  <div class="panel sim-panel">
+    <div class="panel-title">🖥️ Zone de vol</div>
+
+    <div id="simCanvas">
+      <div class="sky" id="sky">
+        <!-- Stars generated by JS -->
+        <div class="grid-lines" id="gridLines"></div>
+      </div>
+      <div class="ground"></div>
+      <div class="ground-line"></div>
+
+      <!-- Altitude bar -->
+      <div class="altitude-bar">
+        <div class="altitude-fill" id="altFill" style="height:0%"></div>
+      </div>
+      <div class="altitude-label">ALTITUDE</div>
+
+      <!-- HUD -->
+      <div class="hud">
+        <div class="hud-row">
+          <div class="hud-item"><label>ALT:</label><value id="hudAlt">0 cm</value></div>
+          <div class="hud-item"><label>X:</label><value id="hudX">0</value></div>
+        </div>
+        <div class="hud-row">
+          <div class="hud-item"><label>POUSS:</label><value id="hudThrust">0%</value></div>
+          <div class="hud-item"><label>ROT:</label><value id="hudRot">0°</value></div>
+        </div>
+      </div>
+
+      <!-- State badge -->
+      <div class="state-badge idle" id="stateBadge">Au sol</div>
+
+      <!-- DRONE -->
+      <div id="drone-wrapper">
+        <div class="drone-body">
+          <div class="arm arm-tl"></div>
+          <div class="arm arm-tr"></div>
+          <div class="arm arm-bl"></div>
+          <div class="arm arm-br"></div>
+          <div class="drone-center">🤖</div>
+          <!-- Motors -->
+          <div class="motor motor-m1 off" id="motorM1">
+            <div class="propeller">
+              <div class="propeller-blade" style="transform:translateX(-19px) rotate(0deg)"></div>
+              <div class="propeller-blade" style="transform:translateX(-19px) rotate(90deg)"></div>
+            </div>
+            M1
+          </div>
+          <div class="motor motor-m2 off" id="motorM2">
+            <div class="propeller">
+              <div class="propeller-blade" style="transform:translateX(-19px) rotate(0deg)"></div>
+              <div class="propeller-blade" style="transform:translateX(-19px) rotate(90deg)"></div>
+            </div>
+            M2
+          </div>
+          <div class="motor motor-m3 off" id="motorM3">
+            <div class="propeller">
+              <div class="propeller-blade" style="transform:translateX(-19px) rotate(0deg)"></div>
+              <div class="propeller-blade" style="transform:translateX(-19px) rotate(90deg)"></div>
+            </div>
+            M3
+          </div>
+          <div class="motor motor-m4 off" id="motorM4">
+            <div class="propeller">
+              <div class="propeller-blade" style="transform:translateX(-19px) rotate(0deg)"></div>
+              <div class="propeller-blade" style="transform:translateX(-19px) rotate(90deg)"></div>
+            </div>
+            M4
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Motor status cards -->
+    <div class="motor-status">
+      <div class="motor-card" id="cardM1">
+        <div class="motor-dot"></div>
+        <div><div class="label">Moteur M1</div><div class="sublabel">Avant-gauche → Pin 2</div></div>
+        <div class="status-text">OFF</div>
+      </div>
+      <div class="motor-card" id="cardM2">
+        <div class="motor-dot"></div>
+        <div><div class="label">Moteur M2</div><div class="sublabel">Avant-droite → Pin 3</div></div>
+        <div class="status-text">OFF</div>
+      </div>
+      <div class="motor-card" id="cardM3">
+        <div class="motor-dot"></div>
+        <div><div class="label">Moteur M3</div><div class="sublabel">Arrière-gauche → Pin 4</div></div>
+        <div class="status-text">OFF</div>
+      </div>
+      <div class="motor-card" id="cardM4">
+        <div class="motor-dot"></div>
+        <div><div class="label">Moteur M4</div><div class="sublabel">Arrière-droite → Pin 5</div></div>
+        <div class="status-text">OFF</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TÉLÉCOMMANDE ══ -->
+  <div class="panel">
+    <div class="panel-title">🎮 Télécommande</div>
+
+    <!-- Throttle meter -->
+    <div class="throttle-section">
+      <div class="throttle-label">⚡ POUSS.</div>
+      <div class="throttle-bar"><div class="throttle-fill" id="throttleBar"></div></div>
+      <div class="throttle-val" id="throttleVal">0%</div>
+    </div>
+
+    <!-- D-Pad -->
+    <div class="dpad">
+      <button class="btn btn-up" id="btnUp" title="Monter">
+        ▲<span class="key-hint">↑</span>
+      </button>
+      <button class="btn btn-left" id="btnLeft" title="Gauche">
+        ◀<span class="key-hint">←</span>
+      </button>
+      <button class="btn btn-stop" id="btnStop" title="Stop / Atterrir">
+        ⏹<span class="key-hint">S</span>
+      </button>
+      <button class="btn btn-right" id="btnRight" title="Droite">
+        ▶<span class="key-hint">→</span>
+      </button>
+      <button class="btn btn-down" id="btnDown" title="Descendre">
+        ▼<span class="key-hint">↓</span>
+      </button>
+    </div>
+
+    <!-- Extra buttons -->
+    <div class="extra-btns">
+      <button class="btn-extra green" onclick="cmdDecollage()">🚀 Décollage</button>
+      <button class="btn-extra red"   onclick="cmdAterrir()">🛬 Atterrir</button>
+      <button class="btn-extra"       onclick="cmdDemoLoop()">🔄 Démo Auto</button>
+      <button class="btn-extra red"   onclick="cmdReset()">↺ Réinitialiser</button>
+    </div>
+
+    <!-- Keyboard hint -->
+    <div class="keyboard-hint">
+      ⌨️ Clavier : <span>↑</span> Monter · <span>↓</span> Descendre<br>
+      <span>←</span> Gauche · <span>→</span> Droite · <span>S</span> Stop
+    </div>
+  </div>
+
+  <!-- ══ CODE ARDUINO ══ -->
+  <div class="panel code-panel">
+    <div class="panel-title">💻 Code Arduino — Exécution en temps réel</div>
+
+    <div class="code-tabs">
+      <div class="tab active" onclick="showTab('code')">drone_motors.ino</div>
+      <div class="tab" onclick="showTab('circuit')">Schéma circuit</div>
+      <div class="tab" onclick="showTab('explain')">Explication</div>
+    </div>
+
+    <!-- CODE TAB -->
+    <div id="tab-code" class="code-area">
+      <div class="file-bar">
+        <div class="dot dot-red"></div>
+        <div class="dot dot-yellow"></div>
+        <div class="dot dot-green"></div>
+        <span style="margin-left:8px">drone_motors.ino — Arduino UNO</span>
+      </div>
+      <pre id="codeBlock"><span class="exec-line" id="line-def"><span class="cmt">// ── Définition des broches ──────────────────────────</span></span>
+<span class="exec-line" id="line-m1"><span class="kw">int</span> <span class="pin">M1</span> <span class="op">=</span> <span class="num">2</span><span class="op">;</span>  <span class="cmt">// Moteur 1 — Avant-gauche</span></span>
+<span class="exec-line" id="line-m2"><span class="kw">int</span> <span class="pin">M2</span> <span class="op">=</span> <span class="num">3</span><span class="op">;</span>  <span class="cmt">// Moteur 2 — Avant-droite</span></span>
+<span class="exec-line" id="line-m3"><span class="kw">int</span> <span class="pin">M3</span> <span class="op">=</span> <span class="num">4</span><span class="op">;</span>  <span class="cmt">// Moteur 3 — Arrière-gauche</span></span>
+<span class="exec-line" id="line-m4"><span class="kw">int</span> <span class="pin">M4</span> <span class="op">=</span> <span class="num">5</span><span class="op">;</span>  <span class="cmt">// Moteur 4 — Arrière-droite</span></span>
+
+<span class="exec-line" id="line-setup"><span class="kw">void</span> <span class="fn">setup</span><span class="op">() {</span></span>
+<span class="exec-line" id="line-pm1">  <span class="fn">pinMode</span><span class="op">(</span><span class="pin">M1</span><span class="op">,</span> <span class="num">OUTPUT</span><span class="op">);</span>  <span class="cmt">// Broche 2 en sortie</span></span>
+<span class="exec-line" id="line-pm2">  <span class="fn">pinMode</span><span class="op">(</span><span class="pin">M2</span><span class="op">,</span> <span class="num">OUTPUT</span><span class="op">);</span>  <span class="cmt">// Broche 3 en sortie</span></span>
+<span class="exec-line" id="line-pm3">  <span class="fn">pinMode</span><span class="op">(</span><span class="pin">M3</span><span class="op">,</span> <span class="num">OUTPUT</span><span class="op">);</span>  <span class="cmt">// Broche 4 en sortie</span></span>
+<span class="exec-line" id="line-pm4">  <span class="fn">pinMode</span><span class="op">(</span><span class="pin">M4</span><span class="op">,</span> <span class="num">OUTPUT</span><span class="op">);</span>  <span class="cmt">// Broche 5 en sortie</span></span>
+<span class="exec-line" id="line-serial">  <span class="fn">Serial</span><span class="op">.</span><span class="fn">begin</span><span class="op">(</span><span class="num">9600</span><span class="op">);</span></span>
+<span class="op">}</span>
+
+<span class="exec-line" id="line-loop"><span class="kw">void</span> <span class="fn">loop</span><span class="op">() {</span></span>
+<span class="exec-line" id="line-cmt-up">  <span class="cmt">// ── MONTER : tous les moteurs ON ──</span></span>
+<span class="exec-line" id="line-up1">  <span class="fn">digitalWrite</span><span class="op">(</span><span class="pin">M1</span><span class="op">,</span> <span class="num">HIGH</span><span class="op">);</span></span>
+<span class="exec-line" id="line-up2">  <span class="fn">digitalWrite</span><span class="op">(</span><span class="pin">M2</span><span class="op">,</span> <span class="num">HIGH</span><span class="op">);</span></span>
+<span class="exec-line" id="line-up3">  <span class="fn">digitalWrite</span><span class="op">(</span><span class="pin">M3</span><span class="op">,</span> <span class="num">HIGH</span><span class="op">);</span></span>
+<span class="exec-line" id="line-up4">  <span class="fn">digitalWrite</span><span class="op">(</span><span class="pin">M4</span><span class="op">,</span> <span class="num">HIGH</span><span class="op">);</span></span>
+<span class="exec-line" id="line-delay1">  <span class="fn">delay</span><span class="op">(</span><span class="num">3000</span><span class="op">);</span>  <span class="cmt">// Vol pendant 3 secondes</span></span>
+
+<span class="exec-line" id="line-cmt-gl">  <span class="cmt">// ── ROTATION GAUCHE : M1+M3 OFF ──</span></span>
+<span class="exec-line" id="line-gl1">  <span class="fn">digitalWrite</span><span class="op">(</span><span class="pin">M1</span><span class="op">,</span> <span class="num" style="color:#F97316">LOW</span><span class="op">);</span></span>
+<span class="exec-line" id="line-gl2">  <span class="fn">digitalWrite</span><span class="op">(</span><span class="pin">M3</span><span class="op">,</span> <span class="num" style="color:#F97316">LOW</span><span class="op">);</span></span>
+<span class="exec-line" id="line-delay2">  <span class="fn">delay</span><span class="op">(</span><span class="num">3000</span><span class="op">);</span>  <span class="cmt">// Rotation 3 secondes</span></span>
+
+<span class="exec-line" id="line-cmt-gr">  <span class="cmt">// ── ROTATION DROITE : M1+M3 ON, M2+M4 OFF ──</span></span>
+<span class="exec-line" id="line-gr1">  <span class="fn">digitalWrite</span><span class="op">(</span><span class="pin">M1</span><span class="op">,</span> <span class="num">HIGH</span><span class="op">);</span></span>
+<span class="exec-line" id="line-gr2">  <span class="fn">digitalWrite</span><span class="op">(</span><span class="pin">M3</span><span class="op">,</span> <span class="num">HIGH</span><span class="op">);</span></span>
+<span class="exec-line" id="line-gr3">  <span class="fn">digitalWrite</span><span class="op">(</span><span class="pin">M2</span><span class="op">,</span> <span class="num" style="color:#F97316">LOW</span><span class="op">);</span></span>
+<span class="exec-line" id="line-gr4">  <span class="fn">digitalWrite</span><span class="op">(</span><span class="pin">M4</span><span class="op">,</span> <span class="num" style="color:#F97316">LOW</span><span class="op">);</span></span>
+<span class="exec-line" id="line-delay3">  <span class="fn">delay</span><span class="op">(</span><span class="num">3000</span><span class="op">);</span>  <span class="cmt">// Rotation 3 secondes</span></span>
+
+<span class="exec-line" id="line-cmt-land">  <span class="cmt">// ── ATTERRISSAGE : tous les moteurs OFF ──</span></span>
+<span class="exec-line" id="line-land1">  <span class="fn">digitalWrite</span><span class="op">(</span><span class="pin">M1</span><span class="op">,</span> <span class="num" style="color:#F97316">LOW</span><span class="op">);</span></span>
+<span class="exec-line" id="line-land2">  <span class="fn">digitalWrite</span><span class="op">(</span><span class="pin">M2</span><span class="op">,</span> <span class="num" style="color:#F97316">LOW</span><span class="op">);</span></span>
+<span class="exec-line" id="line-land3">  <span class="fn">digitalWrite</span><span class="op">(</span><span class="pin">M3</span><span class="op">,</span> <span class="num" style="color:#F97316">LOW</span><span class="op">);</span></span>
+<span class="exec-line" id="line-land4">  <span class="fn">digitalWrite</span><span class="op">(</span><span class="pin">M4</span><span class="op">,</span> <span class="num" style="color:#F97316">LOW</span><span class="op">);</span></span>
+<span class="exec-line" id="line-delay4">  <span class="fn">delay</span><span class="op">(</span><span class="num">2000</span><span class="op">);</span></span>
+<span class="op">}  </span><span class="cmt">// Fin loop() → recommence depuis le début</span></pre>
+    </div>
+
+    <!-- CIRCUIT TAB -->
+    <div id="tab-circuit" class="code-area" style="display:none">
+      <div class="file-bar">
+        <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+        <span style="margin-left:8px">Schéma de connexion — Arduino UNO</span>
+      </div>
+      <pre style="margin-top:30px;color:#E6EDF3;line-height:2">
+<span class="cmt">┌─────────────────────────────────────────────────────────────────┐</span>
+<span class="cmt">│                         ARDUINO UNO                            │</span>
+<span class="cmt">│                                                                 │</span>
+<span class="cmt">│   ┌─────────┐      ┌──────────┐     ┌──────────────────────┐   │</span>
+<span class="cmt">│   │ GND     │──────│ Commun   │     │  TRANSISTOR NPN      │   │</span>
+<span class="cmt">│   └─────────┘      └──────────┘     │  (ou L298N Driver)   │   │</span>
+<span class="cmt">│                                     └──────────────────────┘   │</span>
+<span class="cmt">│                                                                 │</span>
+<span class="var">   </span><span class="pin">Pin 2 ──────────── M1 (Avant-Gauche)</span>  <span class="cmt">← digitalWrite(M1, HIGH/LOW)</span>
+<span class="var">   </span><span class="pin">Pin 3 ──────────── M2 (Avant-Droite)</span>  <span class="cmt">← digitalWrite(M2, HIGH/LOW)</span>
+<span class="var">   </span><span class="pin">Pin 4 ──────────── M3 (Arrière-Gauche)</span><span class="cmt">← digitalWrite(M3, HIGH/LOW)</span>
+<span class="var">   </span><span class="pin">Pin 5 ──────────── M4 (Arrière-Droite)</span><span class="cmt">← digitalWrite(M4, HIGH/LOW)</span>
+<span class="var">   </span><span class="kw">5V  ────────────── VCC Moteurs</span>
+<span class="var">   </span><span class="kw">GND ────────────── GND Commun</span>
+
+<span class="cmt">  Disposition quadcopter vue de dessus :</span>
+
+<span class="num">           M1(Pin2)         M2(Pin3)</span>
+<span class="num">              ●               ●</span>
+<span class="num">               \             /</span>
+<span class="num">                ┌───────────┐</span>
+<span class="num">                │  ARDUINO  │</span>
+<span class="num">                │   ──🤖──  │</span>
+<span class="num">                └───────────┘</span>
+<span class="num">               /             \</span>
+<span class="num">              ●               ●</span>
+<span class="num">           M3(Pin4)         M4(Pin5)</span>
+
+<span class="cmt">  ⚠️  Attention : Toujours utiliser un transistor ou un driver L298N</span>
+<span class="cmt">      entre l'Arduino et les moteurs (les moteurs consomment trop</span>
+<span class="cmt">      de courant pour les sorties directes de l'Arduino).</span>
+      </pre>
+    </div>
+
+    <!-- EXPLAIN TAB -->
+    <div id="tab-explain" class="code-area" style="display:none">
+      <div class="file-bar">
+        <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+        <span style="margin-left:8px">Explication détaillée du code</span>
+      </div>
+      <pre style="margin-top:30px;color:#E6EDF3;line-height:1.9">
+<span class="cmt">══════════════════════════════════════════════════════════════════</span>
+<span class="fn"> PARTIE 1 : Déclaration des variables</span>
+<span class="cmt">══════════════════════════════════════════════════════════════════</span>
+<span class="kw">int</span> <span class="pin">M1</span> = <span class="num">2</span>;   <span class="cmt">► On attribue le numéro de broche à chaque moteur.</span>
+               <span class="cmt">  Cela permet d'utiliser M1 au lieu de "2" partout.</span>
+               <span class="cmt">  Plus lisible et plus facile à modifier.</span>
+
+<span class="cmt">══════════════════════════════════════════════════════════════════</span>
+<span class="fn"> PARTIE 2 : setup() — S'exécute UNE SEULE FOIS au démarrage</span>
+<span class="cmt">══════════════════════════════════════════════════════════════════</span>
+<span class="fn">pinMode</span>(<span class="pin">M1</span>, <span class="num">OUTPUT</span>);
+<span class="cmt">► Configure la broche en mode SORTIE (OUTPUT).</span>
+<span class="cmt">  En mode sortie, la broche peut envoyer 5V (HIGH) ou 0V (LOW).</span>
+<span class="cmt">  Sans cette ligne, la broche est en mode entrée (ne marche pas).</span>
+
+<span class="cmt">══════════════════════════════════════════════════════════════════</span>
+<span class="fn"> PARTIE 3 : loop() — Boucle infinie</span>
+<span class="cmt">══════════════════════════════════════════════════════════════════</span>
+<span class="fn">digitalWrite</span>(<span class="pin">M1</span>, <span class="num">HIGH</span>);
+<span class="cmt">► Envoie 5V sur la broche 2  →  M1 TOURNE</span>
+
+<span class="fn">digitalWrite</span>(<span class="pin">M1</span>, <span class="num" style="color:#F97316">LOW</span>);
+<span class="cmt">► Envoie 0V sur la broche 2  →  M1 S'ARRÊTE</span>
+
+<span class="fn">delay</span>(<span class="num">3000</span>);
+<span class="cmt">► Attend 3000 millisecondes = 3 secondes avant la prochaine ligne.</span>
+
+<span class="cmt">══════════════════════════════════════════════════════════════════</span>
+<span class="fn"> LOGIQUE DE VOL</span>
+<span class="cmt">══════════════════════════════════════════════════════════════════</span>
+<span class="cmt">  Monter       → M1=HIGH  M2=HIGH  M3=HIGH  M4=HIGH</span>
+<span class="cmt">  Descendre    → M1=LOW   M2=LOW   M3=LOW   M4=LOW</span>
+<span class="cmt">  Tourner ←   → M1=LOW   M2=HIGH  M3=LOW   M4=HIGH</span>
+<span class="cmt">  Tourner →   → M1=HIGH  M2=LOW   M3=HIGH  M4=LOW</span>
+      </pre>
+    </div>
+
+    <!-- Serial Monitor -->
+    <div class="panel-title" style="margin-top:14px">📟 Moniteur Série (Serial Monitor)</div>
+    <div class="serial-monitor" id="serialMonitor">
+      <div class="serial-line info">» Simulation initialisée — Arduino UNO</div>
+      <div class="serial-line info">» Broches configurées : M1=2, M2=3, M3=4, M4=5</div>
+      <div class="serial-line">» En attente de commandes...</div>
+    </div>
+  </div>
+
+  <!-- ══ GUIDE TINKERCAD ══ -->
+  <div class="panel tinkercad-panel" id="tinkercad-section" style="grid-column:1/-1;display:none">
+    <div class="panel-title">🧪 Guide de réalisation sur Tinkercad</div>
+
+    <!-- Progress stepper -->
+    <div class="stepper">
+      <div class="step active" id="step-btn-1" onclick="goStep(1)">
+        <div class="step-num">1</div><div class="step-label">Créer le projet</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step" id="step-btn-2" onclick="goStep(2)">
+        <div class="step-num">2</div><div class="step-label">Ajouter Arduino</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step" id="step-btn-3" onclick="goStep(3)">
+        <div class="step-num">3</div><div class="step-label">Ajouter moteurs</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step" id="step-btn-4" onclick="goStep(4)">
+        <div class="step-num">4</div><div class="step-label">Câblage</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step" id="step-btn-5" onclick="goStep(5)">
+        <div class="step-num">5</div><div class="step-label">Programmer</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step" id="step-btn-6" onclick="goStep(6)">
+        <div class="step-num">6</div><div class="step-label">Simuler</div>
+      </div>
+    </div>
+
+    <!-- Step content -->
+    <div class="step-content" id="step-content">
+
+      <!-- STEP 1 -->
+      <div class="step-page active" id="step-1">
+        <div class="step-header">
+          <span class="step-icon">🌐</span>
+          <div>
+            <h2>Étape 1 — Créer un projet sur Tinkercad</h2>
+            <p class="step-sub">Tinkercad est un simulateur gratuit en ligne d'Autodesk</p>
+          </div>
+          <a href="https://www.tinkercad.com/circuits" target="_blank" class="tinkercad-btn">
+            Ouvrir Tinkercad →
+          </a>
+        </div>
+        <div class="step-body">
+          <div class="instructions">
+            <div class="instr-item">
+              <div class="instr-num">1</div>
+              <div class="instr-text">
+                <strong>Allez sur</strong> <a href="https://www.tinkercad.com" target="_blank" style="color:var(--cyan)">tinkercad.com</a>
+                et créez un compte gratuit (ou connectez-vous avec Google/Apple).
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">2</div>
+              <div class="instr-text">
+                Dans le tableau de bord, cliquez sur <strong>"Circuits"</strong> dans le menu de gauche.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">3</div>
+              <div class="instr-text">
+                Cliquez sur le bouton <strong class="badge-green">+ Créer un nouveau circuit</strong> (bouton bleu en haut à droite).
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">4</div>
+              <div class="instr-text">
+                Renommez votre projet : cliquez sur "Nouveau circuit" en haut et tapez <strong>"Drone Arduino"</strong>.
+              </div>
+            </div>
+          </div>
+          <div class="diagram-box">
+            <div class="diagram-title">📋 Interface Tinkercad Circuits</div>
+            <div class="tink-diagram">
+              <div class="tink-toolbar">
+                <span class="tink-logo">T</span>
+                <span style="color:#ccc;font-size:.8rem">Tinkercad — Circuits</span>
+                <span class="tink-badge">GRATUIT</span>
+              </div>
+              <div class="tink-main">
+                <div class="tink-sidebar">
+                  <div class="tink-menu active">🏠 Accueil</div>
+                  <div class="tink-menu">📐 Circuits</div>
+                  <div class="tink-menu">🎨 3D</div>
+                </div>
+                <div class="tink-workspace">
+                  <div class="tink-new-btn">+ Créer un nouveau circuit</div>
+                  <div class="tink-card">📡 Mon Projet</div>
+                  <div class="tink-card dim">Arduino Blink</div>
+                </div>
+              </div>
+            </div>
+            <div class="tip-box">💡 <strong>Astuce :</strong> Tinkercad fonctionne directement dans le navigateur — aucune installation nécessaire !</div>
+          </div>
+        </div>
+        <div class="step-nav">
+          <span></span>
+          <button class="nav-btn" onclick="goStep(2)">Étape suivante →</button>
+        </div>
+      </div>
+
+      <!-- STEP 2 -->
+      <div class="step-page" id="step-2">
+        <div class="step-header">
+          <span class="step-icon">🧠</span>
+          <div>
+            <h2>Étape 2 — Ajouter la carte Arduino UNO</h2>
+            <p class="step-sub">La carte Arduino est le cerveau du drone</p>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="instructions">
+            <div class="instr-item">
+              <div class="instr-num">1</div>
+              <div class="instr-text">
+                Dans l'éditeur de circuit, regardez le panneau de droite : c'est la <strong>bibliothèque de composants</strong>.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">2</div>
+              <div class="instr-text">
+                Dans la barre de recherche, tapez <strong>"Arduino UNO"</strong> et appuyez sur Entrée.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">3</div>
+              <div class="instr-text">
+                <strong>Glissez-déposez</strong> la carte Arduino UNO depuis le panneau vers le centre du plan de travail.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">4</div>
+              <div class="instr-text">
+                Placez la carte <strong>au centre</strong> pour laisser de l'espace autour pour les composants.
+              </div>
+            </div>
+          </div>
+          <div class="diagram-box">
+            <div class="diagram-title">🔍 Carte Arduino UNO — Broches utilisées</div>
+            <div class="arduino-diagram">
+              <div class="arduino-card">
+                <div class="arduino-top">ARDUINO UNO</div>
+                <div class="arduino-pins">
+                  <div class="pin-group left">
+                    <div class="pin-row"><span class="pin-num">5V</span><span class="pin-wire vcc">────</span></div>
+                    <div class="pin-row"><span class="pin-num">GND</span><span class="pin-wire gnd">────</span></div>
+                    <div class="pin-row"><span class="pin-num inactive">A0</span><span class="pin-wire dim">────</span></div>
+                    <div class="pin-row"><span class="pin-num inactive">A1</span><span class="pin-wire dim">────</span></div>
+                  </div>
+                  <div class="arduino-body">🤖</div>
+                  <div class="pin-group right">
+                    <div class="pin-row"><span class="pin-wire motor-pin">────</span><span class="pin-num active">2</span><span class="pin-lbl">M1</span></div>
+                    <div class="pin-row"><span class="pin-wire motor-pin">────</span><span class="pin-num active">3</span><span class="pin-lbl">M2</span></div>
+                    <div class="pin-row"><span class="pin-wire motor-pin">────</span><span class="pin-num active">4</span><span class="pin-lbl">M3</span></div>
+                    <div class="pin-row"><span class="pin-wire motor-pin">────</span><span class="pin-num active">5</span><span class="pin-lbl">M4</span></div>
+                    <div class="pin-row"><span class="pin-wire dim">────</span><span class="pin-num inactive">6</span><span class="pin-lbl dim">-</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="tip-box">💡 <strong>Broches à retenir :</strong> Vous utiliserez les broches numériques <strong>2, 3, 4 et 5</strong> pour contrôler les 4 moteurs.</div>
+          </div>
+        </div>
+        <div class="step-nav">
+          <button class="nav-btn secondary" onclick="goStep(1)">← Précédent</button>
+          <button class="nav-btn" onclick="goStep(3)">Étape suivante →</button>
+        </div>
+      </div>
+
+      <!-- STEP 3 -->
+      <div class="step-page" id="step-3">
+        <div class="step-header">
+          <span class="step-icon">⚙️</span>
+          <div>
+            <h2>Étape 3 — Ajouter les 4 moteurs DC</h2>
+            <p class="step-sub">Un moteur DC par hélice du drone</p>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="instructions">
+            <div class="instr-item">
+              <div class="instr-num">1</div>
+              <div class="instr-text">
+                Dans la bibliothèque, recherchez <strong>"DC Motor"</strong> ou <strong>"Motor"</strong>.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">2</div>
+              <div class="instr-text">
+                Ajoutez <strong>4 moteurs DC</strong> sur le plan de travail. Disposez-les en forme de croix autour de l'Arduino.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">3</div>
+              <div class="instr-text">
+                <span class="badge-orange">⚠️ Important</span> — Tinkercad n'a pas de vrai moteur brushless.
+                Utilisez soit un <strong>moteur DC</strong> soit une <strong>LED</strong> pour simuler chaque moteur.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">4</div>
+              <div class="instr-text">
+                Étiquetez chaque moteur : clic droit → <strong>"Annoter"</strong> → M1, M2, M3, M4.
+              </div>
+            </div>
+          </div>
+          <div class="diagram-box">
+            <div class="diagram-title">🗺️ Disposition des composants</div>
+            <div class="layout-diagram">
+              <div class="comp m1-pos">
+                <div class="comp-icon">⚙️</div>
+                <div class="comp-lbl">M1<br><small>Av.Gauche</small></div>
+              </div>
+              <div class="comp m2-pos">
+                <div class="comp-icon">⚙️</div>
+                <div class="comp-lbl">M2<br><small>Av.Droite</small></div>
+              </div>
+              <div class="comp center-pos">
+                <div class="comp-icon" style="font-size:1.8rem">🤖</div>
+                <div class="comp-lbl" style="color:var(--cyan)">Arduino<br>UNO</div>
+              </div>
+              <div class="comp m3-pos">
+                <div class="comp-icon">⚙️</div>
+                <div class="comp-lbl">M3<br><small>Ar.Gauche</small></div>
+              </div>
+              <div class="comp m4-pos">
+                <div class="comp-icon">⚙️</div>
+                <div class="comp-lbl">M4<br><small>Ar.Droite</small></div>
+              </div>
+              <!-- Connection lines -->
+              <svg class="conn-lines" viewBox="0 0 300 200">
+                <line x1="75" y1="55" x2="148" y2="95" stroke="#00B4D8" stroke-width="1.5" stroke-dasharray="4"/>
+                <line x1="225" y1="55" x2="152" y2="95" stroke="#00B4D8" stroke-width="1.5" stroke-dasharray="4"/>
+                <line x1="75" y1="145" x2="148" y2="105" stroke="#00B4D8" stroke-width="1.5" stroke-dasharray="4"/>
+                <line x1="225" y1="145" x2="152" y2="105" stroke="#00B4D8" stroke-width="1.5" stroke-dasharray="4"/>
+              </svg>
+            </div>
+            <div class="tip-box">💡 <strong>Alternative :</strong> Utilisez 4 LEDs (une couleur par moteur) si les moteurs DC ne sont pas disponibles — le comportement électrique est identique pour notre simulation.</div>
+          </div>
+        </div>
+        <div class="step-nav">
+          <button class="nav-btn secondary" onclick="goStep(2)">← Précédent</button>
+          <button class="nav-btn" onclick="goStep(4)">Étape suivante →</button>
+        </div>
+      </div>
+
+      <!-- STEP 4 -->
+      <div class="step-page" id="step-4">
+        <div class="step-header">
+          <span class="step-icon">🔌</span>
+          <div>
+            <h2>Étape 4 — Câblage des connexions</h2>
+            <p class="step-sub">Relier chaque moteur à sa broche Arduino</p>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="instructions">
+            <div class="instr-item">
+              <div class="instr-num">1</div>
+              <div class="instr-text">
+                <strong>M1 (Avant-Gauche)</strong> : Cliquez sur la borne + du moteur M1,
+                tirez un fil jusqu'à la <strong class="pin-badge">Pin 2</strong> de l'Arduino.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">2</div>
+              <div class="instr-text">
+                <strong>M2 (Avant-Droite)</strong> : Connectez la borne + du moteur M2 à la
+                <strong class="pin-badge">Pin 3</strong>.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">3</div>
+              <div class="instr-text">
+                <strong>M3 (Arrière-Gauche)</strong> : Connectez M3 à la
+                <strong class="pin-badge">Pin 4</strong>.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">4</div>
+              <div class="instr-text">
+                <strong>M4 (Arrière-Droite)</strong> : Connectez M4 à la
+                <strong class="pin-badge">Pin 5</strong>.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">5</div>
+              <div class="instr-text">
+                Connectez toutes les bornes <strong>GND (–)</strong> des moteurs au
+                <strong style="color:#EF4444">GND</strong> de l'Arduino.
+              </div>
+            </div>
+          </div>
+          <div class="diagram-box">
+            <div class="diagram-title">⚡ Tableau des connexions</div>
+            <table class="conn-table">
+              <thead>
+                <tr><th>Composant</th><th>Borne</th><th>→</th><th>Arduino</th><th>Couleur fil</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Moteur M1 (Av-G)</td><td>+</td><td>→</td>
+                  <td><span class="pin-badge">Pin 2</span></td>
+                  <td><span class="wire-color" style="background:#00B4D8"></span> Cyan</td>
+                </tr>
+                <tr>
+                  <td>Moteur M2 (Av-D)</td><td>+</td><td>→</td>
+                  <td><span class="pin-badge">Pin 3</span></td>
+                  <td><span class="wire-color" style="background:#22C55E"></span> Vert</td>
+                </tr>
+                <tr>
+                  <td>Moteur M3 (Ar-G)</td><td>+</td><td>→</td>
+                  <td><span class="pin-badge">Pin 4</span></td>
+                  <td><span class="wire-color" style="background:#F97316"></span> Orange</td>
+                </tr>
+                <tr>
+                  <td>Moteur M4 (Ar-D)</td><td>+</td><td>→</td>
+                  <td><span class="pin-badge">Pin 5</span></td>
+                  <td><span class="wire-color" style="background:#A855F7"></span> Violet</td>
+                </tr>
+                <tr class="gnd-row">
+                  <td>Tous les moteurs</td><td>–</td><td>→</td>
+                  <td><span class="gnd-badge">GND</span></td>
+                  <td><span class="wire-color" style="background:#1A1A1A;border:1px solid #666"></span> Noir</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="tip-box warn">⚠️ <strong>Protection obligatoire :</strong> Dans un vrai circuit, ajoutez un <strong>transistor NPN (2N2222)</strong> ou un <strong>driver L298N</strong> entre chaque broche Arduino et le moteur, car les moteurs consomment plus de courant que la sortie Arduino ne peut fournir (max 40mA).</div>
+          </div>
+        </div>
+        <div class="step-nav">
+          <button class="nav-btn secondary" onclick="goStep(3)">← Précédent</button>
+          <button class="nav-btn" onclick="goStep(5)">Étape suivante →</button>
+        </div>
+      </div>
+
+      <!-- STEP 5 -->
+      <div class="step-page" id="step-5">
+        <div class="step-header">
+          <span class="step-icon">💻</span>
+          <div>
+            <h2>Étape 5 — Écrire le programme Arduino</h2>
+            <p class="step-sub">Copiez ce code dans l'éditeur Tinkercad</p>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="instructions">
+            <div class="instr-item">
+              <div class="instr-num">1</div>
+              <div class="instr-text">
+                Cliquez sur la carte Arduino dans Tinkercad, puis cliquez sur <strong>"Code"</strong> en haut de l'écran.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">2</div>
+              <div class="instr-text">
+                Sélectionnez le mode <strong>"Texte"</strong> (pas "Blocs") pour écrire du vrai code Arduino.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">3</div>
+              <div class="instr-text">
+                <strong>Effacez</strong> le code existant, puis <strong>copiez-collez</strong> le code ci-dessous.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">4</div>
+              <div class="instr-text">
+                Cliquez sur <strong class="badge-green">Démarrer la simulation</strong> pour lancer l'exécution.
+              </div>
+            </div>
+          </div>
+          <div class="diagram-box" style="flex:1.5">
+            <div class="diagram-title" style="display:flex;justify-content:space-between;align-items:center">
+              Code à copier dans Tinkercad
+              <button class="copy-btn" onclick="copyCode()">📋 Copier le code</button>
+            </div>
+            <div class="tink-code-block">
+              <div class="tink-code-bar">
+                <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+                <span style="margin-left:8px;color:#8B949E;font-size:.72rem">drone_tinkercad.ino</span>
+              </div>
+              <pre id="tinkercadCode" style="margin-top:28px"><span class="cmt">// ═══════════════════════════════════════════════
+// SIMULATION DRONE ARDUINO — Tinkercad
+// Moteurs DC — Broches 2, 3, 4, 5
+// ═══════════════════════════════════════════════</span>
+
+<span class="cmt">// Déclaration des broches</span>
+<span class="kw">const int</span> <span class="pin">M1</span> = <span class="num">2</span>;  <span class="cmt">// Moteur 1 — Avant-Gauche</span>
+<span class="kw">const int</span> <span class="pin">M2</span> = <span class="num">3</span>;  <span class="cmt">// Moteur 2 — Avant-Droite</span>
+<span class="kw">const int</span> <span class="pin">M3</span> = <span class="num">4</span>;  <span class="cmt">// Moteur 3 — Arrière-Gauche</span>
+<span class="kw">const int</span> <span class="pin">M4</span> = <span class="num">5</span>;  <span class="cmt">// Moteur 4 — Arrière-Droite</span>
+
+<span class="cmt">// ── SETUP : s'exécute une seule fois ────────────</span>
+<span class="kw">void</span> <span class="fn">setup</span>() {
+  <span class="fn">Serial</span>.<span class="fn">begin</span>(<span class="num">9600</span>);
+  <span class="fn">pinMode</span>(<span class="pin">M1</span>, <span class="num">OUTPUT</span>);
+  <span class="fn">pinMode</span>(<span class="pin">M2</span>, <span class="num">OUTPUT</span>);
+  <span class="fn">pinMode</span>(<span class="pin">M3</span>, <span class="num">OUTPUT</span>);
+  <span class="fn">pinMode</span>(<span class="pin">M4</span>, <span class="num">OUTPUT</span>);
+  <span class="fn">Serial</span>.<span class="fn">println</span>(<span class="str">"=== Drone Arduino prêt ==="</span>);
+}
+
+<span class="cmt">// ── Fonction : allumer tous les moteurs ─────────</span>
+<span class="kw">void</span> <span class="fn">monter</span>() {
+  <span class="fn">digitalWrite</span>(<span class="pin">M1</span>, <span class="num">HIGH</span>);
+  <span class="fn">digitalWrite</span>(<span class="pin">M2</span>, <span class="num">HIGH</span>);
+  <span class="fn">digitalWrite</span>(<span class="pin">M3</span>, <span class="num">HIGH</span>);
+  <span class="fn">digitalWrite</span>(<span class="pin">M4</span>, <span class="num">HIGH</span>);
+  <span class="fn">Serial</span>.<span class="fn">println</span>(<span class="str">"ACTION: Monter — tous moteurs ON"</span>);
+}
+
+<span class="cmt">// ── Fonction : éteindre tous les moteurs ────────</span>
+<span class="kw">void</span> <span class="fn">atterrir</span>() {
+  <span class="fn">digitalWrite</span>(<span class="pin">M1</span>, <span class="num" style="color:#F97316">LOW</span>);
+  <span class="fn">digitalWrite</span>(<span class="pin">M2</span>, <span class="num" style="color:#F97316">LOW</span>);
+  <span class="fn">digitalWrite</span>(<span class="pin">M3</span>, <span class="num" style="color:#F97316">LOW</span>);
+  <span class="fn">digitalWrite</span>(<span class="pin">M4</span>, <span class="num" style="color:#F97316">LOW</span>);
+  <span class="fn">Serial</span>.<span class="fn">println</span>(<span class="str">"ACTION: Atterrir — tous moteurs OFF"</span>);
+}
+
+<span class="cmt">// ── Fonction : rotation gauche ───────────────────</span>
+<span class="kw">void</span> <span class="fn">rotationGauche</span>() {
+  <span class="fn">digitalWrite</span>(<span class="pin">M1</span>, <span class="num" style="color:#F97316">LOW</span>);   <span class="cmt">// M1 OFF</span>
+  <span class="fn">digitalWrite</span>(<span class="pin">M2</span>, <span class="num">HIGH</span>);  <span class="cmt">// M2 ON</span>
+  <span class="fn">digitalWrite</span>(<span class="pin">M3</span>, <span class="num" style="color:#F97316">LOW</span>);   <span class="cmt">// M3 OFF</span>
+  <span class="fn">digitalWrite</span>(<span class="pin">M4</span>, <span class="num">HIGH</span>);  <span class="cmt">// M4 ON</span>
+  <span class="fn">Serial</span>.<span class="fn">println</span>(<span class="str">"ACTION: Rotation Gauche"</span>);
+}
+
+<span class="cmt">// ── Fonction : rotation droite ───────────────────</span>
+<span class="kw">void</span> <span class="fn">rotationDroite</span>() {
+  <span class="fn">digitalWrite</span>(<span class="pin">M1</span>, <span class="num">HIGH</span>);  <span class="cmt">// M1 ON</span>
+  <span class="fn">digitalWrite</span>(<span class="pin">M2</span>, <span class="num" style="color:#F97316">LOW</span>);   <span class="cmt">// M2 OFF</span>
+  <span class="fn">digitalWrite</span>(<span class="pin">M3</span>, <span class="num">HIGH</span>);  <span class="cmt">// M3 ON</span>
+  <span class="fn">digitalWrite</span>(<span class="pin">M4</span>, <span class="num" style="color:#F97316">LOW</span>);   <span class="cmt">// M4 OFF</span>
+  <span class="fn">Serial</span>.<span class="fn">println</span>(<span class="str">"ACTION: Rotation Droite"</span>);
+}
+
+<span class="cmt">// ── LOOP : boucle infinie ────────────────────────</span>
+<span class="kw">void</span> <span class="fn">loop</span>() {
+  <span class="fn">monter</span>();           <span class="cmt">// Décollage</span>
+  <span class="fn">delay</span>(<span class="num">3000</span>);        <span class="cmt">// Maintien 3s</span>
+
+  <span class="fn">rotationGauche</span>();   <span class="cmt">// Tourner gauche</span>
+  <span class="fn">delay</span>(<span class="num">2000</span>);
+
+  <span class="fn">monter</span>();           <span class="cmt">// Remontée</span>
+  <span class="fn">delay</span>(<span class="num">1500</span>);
+
+  <span class="fn">rotationDroite</span>();   <span class="cmt">// Tourner droite</span>
+  <span class="fn">delay</span>(<span class="num">2000</span>);
+
+  <span class="fn">atterrir</span>();         <span class="cmt">// Atterrissage</span>
+  <span class="fn">delay</span>(<span class="num">2000</span>);
+}              <span class="cmt">// ← Retour au début de loop()</span></pre>
+            </div>
+          </div>
+        </div>
+        <div class="step-nav">
+          <button class="nav-btn secondary" onclick="goStep(4)">← Précédent</button>
+          <button class="nav-btn" onclick="goStep(6)">Étape suivante →</button>
+        </div>
+      </div>
+
+      <!-- STEP 6 -->
+      <div class="step-page" id="step-6">
+        <div class="step-header">
+          <span class="step-icon">▶️</span>
+          <div>
+            <h2>Étape 6 — Lancer et observer la simulation</h2>
+            <p class="step-sub">Vérifiez que les moteurs s'activent correctement</p>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="instructions">
+            <div class="instr-item">
+              <div class="instr-num">1</div>
+              <div class="instr-text">
+                Cliquez sur le bouton vert <strong class="badge-green">▶ Démarrer la simulation</strong> en haut à droite de Tinkercad.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">2</div>
+              <div class="instr-text">
+                Observez les moteurs (ou LEDs) s'allumer et s'éteindre selon la séquence du programme.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">3</div>
+              <div class="instr-text">
+                Ouvrez le <strong>Moniteur Série</strong> (icône loupe 🔍 en bas) pour voir les messages <code>Serial.println()</code>.
+              </div>
+            </div>
+            <div class="instr-item">
+              <div class="instr-num">4</div>
+              <div class="instr-text">
+                Cliquez sur <strong class="badge-red">⏹ Arrêter</strong> pour stopper la simulation à tout moment.
+              </div>
+            </div>
+          </div>
+          <div class="diagram-box">
+            <div class="diagram-title">✅ Résultats attendus dans le moniteur série</div>
+            <div class="serial-expected">
+              <div class="se-line info">» === Drone Arduino prêt ===</div>
+              <div class="se-line green">» ACTION: Monter — tous moteurs ON</div>
+              <div class="se-line yellow">» ACTION: Rotation Gauche</div>
+              <div class="se-line green">» ACTION: Monter — tous moteurs ON</div>
+              <div class="se-line yellow">» ACTION: Rotation Droite</div>
+              <div class="se-line red">» ACTION: Atterrir — tous moteurs OFF</div>
+              <div class="se-line green" style="margin-top:6px">» ACTION: Monter — tous moteurs ON</div>
+              <div class="se-line" style="color:#555;font-size:.72rem">... (séquence répétée en boucle)</div>
+            </div>
+
+            <div class="checklist">
+              <div class="check-title">🔎 Checklist de vérification</div>
+              <label class="check-item"><input type="checkbox"> M1 s'allume lors de la montée</label>
+              <label class="check-item"><input type="checkbox"> M2 s'allume lors de la montée</label>
+              <label class="check-item"><input type="checkbox"> M3 s'allume lors de la montée</label>
+              <label class="check-item"><input type="checkbox"> M4 s'allume lors de la montée</label>
+              <label class="check-item"><input type="checkbox"> M1 et M3 s'éteignent en rotation gauche</label>
+              <label class="check-item"><input type="checkbox"> M2 et M4 s'éteignent en rotation droite</label>
+              <label class="check-item"><input type="checkbox"> Tous les moteurs s'éteignent à l'atterrissage</label>
+              <label class="check-item"><input type="checkbox"> Messages visibles dans le moniteur série</label>
+            </div>
+
+            <div class="tip-box" style="margin-top:10px">
+              🎉 <strong>Félicitations !</strong> Si tout fonctionne, votre simulation de drone Arduino sur Tinkercad est réussie.
+              Vous pouvez maintenant tester sur un vrai Arduino !
+            </div>
+          </div>
+        </div>
+        <div class="step-nav">
+          <button class="nav-btn secondary" onclick="goStep(5)">← Précédent</button>
+          <a href="https://www.tinkercad.com/circuits" target="_blank" class="nav-btn">
+            Ouvrir Tinkercad maintenant →
+          </a>
+        </div>
+      </div>
+
+    </div><!-- end step-content -->
+  </div><!-- end tinkercad-panel -->
+
+</div><!-- end grid -->
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════
+const state = {
+  altitude: 0,
+  maxAlt: 280,      // pixels
+  x: 0,
+  rotation: 0,
+  motors: { M1: false, M2: false, M3: false, M4: false },
+  mode: 'idle',     // idle | flying | left | right | landing | demo
+  demoTimer: null,
+  throttle: 0,
+  canvasH: 420,
+  demoRunning: false,
+};
+
+// ══════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════
+(function init() {
+  // Stars
+  const sky = document.getElementById('sky');
+  for (let i = 0; i < 60; i++) {
+    const star = document.createElement('div');
+    star.className = 'star';
+    star.style.cssText = `left:${Math.random()*100}%;top:${Math.random()*80}%;
+      --d:${1.5+Math.random()*3}s; opacity:${0.3+Math.random()*0.7}`;
+    sky.appendChild(star);
+  }
+  // Grid lines
+  const gl = document.getElementById('gridLines');
+  for (let i = 0; i < 6; i++) gl.appendChild(Object.assign(document.createElement('div'), {className:'grid-line'}));
+
+  updateDronePosition();
+})();
+
+// ══════════════════════════════════════════════════════════════════
+// MOTOR CONTROL
+// ══════════════════════════════════════════════════════════════════
+function setMotors(m1, m2, m3, m4) {
+  state.motors = { M1: m1, M2: m2, M3: m3, M4: m4 };
+  ['M1','M2','M3','M4'].forEach(m => {
+    const el  = document.getElementById('motor' + m);
+    const card = document.getElementById('card' + m);
+    const on  = state.motors[m];
+    el.className   = `motor motor-${m.toLowerCase()} ${on ? 'on' : 'off'}`;
+    card.className = `motor-card ${on ? 'active' : ''}`;
+    card.querySelector('.status-text').textContent = on ? 'ON ⚡' : 'OFF';
+  });
+
+  // Throttle = average of active motors
+  const active = Object.values(state.motors).filter(Boolean).length;
+  state.throttle = Math.round(active / 4 * 100);
+  document.getElementById('throttleBar').style.width  = state.throttle + '%';
+  document.getElementById('throttleVal').textContent  = state.throttle + '%';
+  document.getElementById('hudThrust').textContent    = state.throttle + '%';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// HIGHLIGHT CODE LINE
+// ══════════════════════════════════════════════════════════════════
+let lastLine = null;
+function highlightLine(lineId) {
+  if (lastLine) document.getElementById(lastLine)?.classList.remove('running');
+  if (lineId)   document.getElementById(lineId)?.classList.add('running');
+  lastLine = lineId;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SERIAL LOG
+// ══════════════════════════════════════════════════════════════════
+function serialLog(msg, type = '') {
+  const mon = document.getElementById('serialMonitor');
+  const line = document.createElement('div');
+  line.className = 'serial-line ' + type;
+  const t = new Date();
+  const ts = `[${String(t.getSeconds()).padStart(2,'0')}.${String(t.getMilliseconds()).padStart(3,'0')}s]`;
+  line.textContent = `${ts} ${msg}`;
+  mon.appendChild(line);
+  if (mon.children.length > 30) mon.removeChild(mon.firstChild);
+  mon.scrollTop = mon.scrollHeight;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DRONE POSITION UPDATE
+// ══════════════════════════════════════════════════════════════════
+function updateDronePosition() {
+  const wrapper = document.getElementById('drone-wrapper');
+  const canvas  = document.getElementById('simCanvas');
+  const maxW    = canvas.offsetWidth;
+  const basePx  = 80;   // bottom offset when at ground
+  const bottomPx = basePx + state.altitude;
+
+  wrapper.style.bottom = bottomPx + 'px';
+
+  // Center + horizontal offset
+  const centerPercent = 50 + (state.x / maxW * 100);
+  wrapper.style.left = Math.max(8, Math.min(92, centerPercent)) + '%';
+
+  // Rotation
+  wrapper.style.transform = `translateX(-50%) rotate(${state.rotation}deg)`;
+
+  // Altitude bar & HUD
+  const pct = Math.min(100, (state.altitude / state.maxAlt) * 100);
+  document.getElementById('altFill').style.height = pct + '%';
+  document.getElementById('hudAlt').textContent   = Math.round(state.altitude * 1.2) + ' cm';
+  document.getElementById('hudX').textContent     = Math.round(state.x);
+  document.getElementById('hudRot').textContent   = Math.round(state.rotation) + '°';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// STATE BADGE
+// ══════════════════════════════════════════════════════════════════
+function setBadge(mode, label) {
+  const b = document.getElementById('stateBadge');
+  b.className = `state-badge ${mode}`;
+  b.textContent = label;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PARTICLES
+// ══════════════════════════════════════════════════════════════════
+function spawnParticles() {
+  if (state.altitude < 2) return;
+  const wrapper = document.getElementById('drone-wrapper');
+  const canvas  = document.getElementById('simCanvas');
+  for (let i = 0; i < 4; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const rx = wrapper.offsetLeft + Math.random() * 120 - 30;
+    const ry = canvas.offsetHeight - (state.altitude + 80) + Math.random() * 20;
+    p.style.cssText = `left:${rx}px;top:${ry}px`;
+    canvas.appendChild(p);
+    setTimeout(() => p.remove(), 1000);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ANIMATION LOOP
+// ══════════════════════════════════════════════════════════════════
+let animId;
+function animate() {
+  const { mode } = state;
+
+  if (mode === 'flying') {
+    if (state.altitude < state.maxAlt) state.altitude += 2.5;
+    setMotors(true, true, true, true);
+    highlightLine(state.altitude < 10 ? 'line-up1' : 'line-up2');
+    spawnParticles();
+  }
+  else if (mode === 'landing') {
+    if (state.altitude > 0) { state.altitude -= 2; if(state.altitude<0) state.altitude=0; }
+    setMotors(false, false, false, false);
+    highlightLine('line-land1');
+  }
+  else if (mode === 'left') {
+    if (state.altitude < 40) state.altitude += 1;
+    state.x -= 2;
+    state.rotation = Math.max(-18, state.rotation - 1);
+    setMotors(false, true, false, true);
+    highlightLine('line-gl1');
+    spawnParticles();
+  }
+  else if (mode === 'right') {
+    if (state.altitude < 40) state.altitude += 1;
+    state.x += 2;
+    state.rotation = Math.min(18, state.rotation + 1);
+    setMotors(true, false, true, false);
+    highlightLine('line-gr1');
+    spawnParticles();
+  }
+  else if (mode === 'down') {
+    if (state.altitude > 0) state.altitude -= 2;
+    setMotors(false, false, false, false);
+    highlightLine('line-land1');
+  }
+  else {
+    // Idle — drift rotation back
+    state.rotation *= 0.9;
+    if (Math.abs(state.rotation) < 0.5) state.rotation = 0;
+  }
+
+  updateDronePosition();
+  animId = requestAnimationFrame(animate);
+}
+animate();
+
+// ══════════════════════════════════════════════════════════════════
+// COMMANDS
+// ══════════════════════════════════════════════════════════════════
+function cmdMonter() {
+  if (state.altitude >= state.maxAlt) return;
+  state.mode = 'flying';
+  setBadge('flying', '⬆ Montée');
+  serialLog('digitalWrite(M1,HIGH); digitalWrite(M2,HIGH); digitalWrite(M3,HIGH); digitalWrite(M4,HIGH);');
+  serialLog('→ Tous les moteurs ON — Montée', 'info');
+  setBtn('btnUp', true);
+}
+function cmdDescendre() {
+  state.mode = 'down';
+  setBadge('landing', '⬇ Descente');
+  serialLog('digitalWrite(M1,LOW); ... M4,LOW) — Descente', 'warn');
+  setBtn('btnDown', true);
+}
+function cmdGauche() {
+  state.mode = 'left';
+  setBadge('turning', '↰ Rotation gauche');
+  serialLog('digitalWrite(M1,LOW); digitalWrite(M3,LOW); — Rotation gauche');
+  highlightLine('line-gl1');
+  setBtn('btnLeft', true);
+}
+function cmdDroite() {
+  state.mode = 'right';
+  setBadge('turning', '↱ Rotation droite');
+  serialLog('digitalWrite(M2,LOW); digitalWrite(M4,LOW); — Rotation droite');
+  highlightLine('line-gr1');
+  setBtn('btnRight', true);
+}
+function cmdStop() {
+  state.mode = 'idle';
+  setMotors(false, false, false, false);
+  highlightLine(null);
+  setBadge('idle', '⏹ Arrêt');
+  serialLog('STOP — Tous moteurs OFF', 'warn');
+  clearAllBtns();
+}
+function cmdDecollage() {
+  state.mode = 'flying';
+  setBadge('flying', '🚀 Décollage');
+  serialLog('=== DÉCOLLAGE ===', 'info');
+  serialLog('Séquence : M1=HIGH, M2=HIGH, M3=HIGH, M4=HIGH', 'info');
+  highlightLine('line-up1');
+}
+function cmdAterrir() {
+  state.mode = 'landing';
+  setBadge('landing', '🛬 Atterrissage');
+  serialLog('=== ATTERRISSAGE ===', 'warn');
+  serialLog('Séquence : M1=LOW, M2=LOW, M3=LOW, M4=LOW', 'warn');
+  highlightLine('line-land1');
+}
+function cmdReset() {
+  if (state.demoRunning) stopDemo();
+  state.mode = 'landing';
+  state.x = 0;
+  state.rotation = 0;
+  setMotors(false, false, false, false);
+  setTimeout(() => { state.altitude = 0; setBadge('idle','↺ Réinitialisé'); }, 800);
+  serialLog('RESET — Retour position initiale', 'warn');
+  clearAllBtns();
+  highlightLine(null);
+}
+
+// ── DEMO LOOP ──────────────────────────────────────────────────
+let demoStep = 0;
+const demoSteps = [
+  { fn: () => { state.mode = 'flying'; highlightLine('line-cmt-up'); serialLog('[Démo] Montée — tous moteurs ON','info'); }, dur: 3000 },
+  { fn: () => { state.mode = 'left';   highlightLine('line-cmt-gl'); serialLog('[Démo] Rotation gauche — M1,M3 LOW'); },    dur: 2500 },
+  { fn: () => { state.mode = 'flying'; highlightLine('line-up1');    serialLog('[Démo] Maintien altitude','info'); },        dur: 1500 },
+  { fn: () => { state.mode = 'right';  highlightLine('line-cmt-gr'); serialLog('[Démo] Rotation droite — M2,M4 LOW'); },    dur: 2500 },
+  { fn: () => { state.mode = 'flying'; highlightLine('line-up3');    serialLog('[Démo] Maintien altitude','info'); },        dur: 1500 },
+  { fn: () => { cmdAterrir(); },                                                                                               dur: 2500 },
+];
+
+function cmdDemoLoop() {
+  if (state.demoRunning) { stopDemo(); return; }
+  state.demoRunning = true;
+  document.querySelector('[onclick="cmdDemoLoop()"]').textContent = '⏹ Arrêter démo';
+  serialLog('=== MODE DÉMO AUTOMATIQUE ===', 'info');
+  runDemoStep();
+}
+function runDemoStep() {
+  if (!state.demoRunning) return;
+  const s = demoSteps[demoStep % demoSteps.length];
+  s.fn();
+  state.demoTimer = setTimeout(() => { demoStep++; runDemoStep(); }, s.dur);
+}
+function stopDemo() {
+  clearTimeout(state.demoTimer);
+  state.demoRunning = false;
+  demoStep = 0;
+  document.querySelector('[onclick="cmdDemoLoop()"]').textContent = '🔄 Démo Auto';
+  serialLog('Démo arrêtée', 'warn');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BUTTON VISUAL STATE
+// ══════════════════════════════════════════════════════════════════
+function setBtn(id, active) {
+  clearAllBtns();
+  if (id) document.getElementById(id)?.classList.add('active');
+}
+function clearAllBtns() {
+  ['btnUp','btnDown','btnLeft','btnRight','btnStop'].forEach(id =>
+    document.getElementById(id)?.classList.remove('active')
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BUTTON EVENTS (hold to continue)
+// ══════════════════════════════════════════════════════════════════
+function addHoldBtn(id, startFn, stopFn) {
+  const el = document.getElementById(id);
+  let held = false;
+  const start = (e) => { e.preventDefault(); held = true; startFn(); };
+  const stop  = (e) => { if (!held) return; held = false; if(stopFn) stopFn(); };
+  el.addEventListener('mousedown', start);
+  el.addEventListener('touchstart', start, { passive: false });
+  el.addEventListener('mouseup',   stop);
+  el.addEventListener('mouseleave', stop);
+  el.addEventListener('touchend',  stop);
+}
+
+addHoldBtn('btnUp',    cmdMonter,   cmdStop);
+addHoldBtn('btnDown',  cmdDescendre, cmdStop);
+addHoldBtn('btnLeft',  cmdGauche,   cmdStop);
+addHoldBtn('btnRight', cmdDroite,   cmdStop);
+document.getElementById('btnStop').addEventListener('click', cmdStop);
+
+// ══════════════════════════════════════════════════════════════════
+// KEYBOARD
+// ══════════════════════════════════════════════════════════════════
+const keys = {};
+document.addEventListener('keydown', e => {
+  if (keys[e.key]) return;
+  keys[e.key] = true;
+  const map = {
+    'ArrowUp': cmdMonter, 'ArrowDown': cmdDescendre,
+    'ArrowLeft': cmdGauche, 'ArrowRight': cmdDroite,
+    's': cmdStop, 'S': cmdStop
+  };
+  if (map[e.key]) { e.preventDefault(); map[e.key](); }
+});
+document.addEventListener('keyup', e => {
+  delete keys[e.key];
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) cmdStop();
+});
+
+// ══════════════════════════════════════════════════════════════════
+// TINKERCAD GUIDE
+// ══════════════════════════════════════════════════════════════════
+function toggleTinkercad() {
+  const section = document.getElementById('tinkercad-section');
+  const btn     = document.getElementById('tinkercadToggle');
+  const visible = section.style.display !== 'none';
+  section.style.display = visible ? 'none' : 'block';
+  btn.classList.toggle('open', !visible);
+  if (!visible) {
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+let currentStep = 1;
+function goStep(n) {
+  // Update pages
+  document.querySelectorAll('.step-page').forEach(p => p.classList.remove('active'));
+  document.getElementById('step-' + n)?.classList.add('active');
+
+  // Update stepper buttons
+  for (let i = 1; i <= 6; i++) {
+    const btn = document.getElementById('step-btn-' + i);
+    if (!btn) continue;
+    btn.classList.remove('active', 'done');
+    if (i === n) btn.classList.add('active');
+    else if (i < n) btn.classList.add('done');
+  }
+  currentStep = n;
+}
+
+function copyCode() {
+  const raw = `// ═══════════════════════════════════════════════
+// SIMULATION DRONE ARDUINO — Tinkercad
+// Moteurs DC — Broches 2, 3, 4, 5
+// ═══════════════════════════════════════════════
+
+const int M1 = 2;  // Moteur 1 — Avant-Gauche
+const int M2 = 3;  // Moteur 2 — Avant-Droite
+const int M3 = 4;  // Moteur 3 — Arrière-Gauche
+const int M4 = 5;  // Moteur 4 — Arrière-Droite
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(M1, OUTPUT);
+  pinMode(M2, OUTPUT);
+  pinMode(M3, OUTPUT);
+  pinMode(M4, OUTPUT);
+  Serial.println("=== Drone Arduino prêt ===");
+}
+
+void monter() {
+  digitalWrite(M1, HIGH);
+  digitalWrite(M2, HIGH);
+  digitalWrite(M3, HIGH);
+  digitalWrite(M4, HIGH);
+  Serial.println("ACTION: Monter — tous moteurs ON");
+}
+
+void atterrir() {
+  digitalWrite(M1, LOW);
+  digitalWrite(M2, LOW);
+  digitalWrite(M3, LOW);
+  digitalWrite(M4, LOW);
+  Serial.println("ACTION: Atterrir — tous moteurs OFF");
+}
+
+void rotationGauche() {
+  digitalWrite(M1, LOW);
+  digitalWrite(M2, HIGH);
+  digitalWrite(M3, LOW);
+  digitalWrite(M4, HIGH);
+  Serial.println("ACTION: Rotation Gauche");
+}
+
+void rotationDroite() {
+  digitalWrite(M1, HIGH);
+  digitalWrite(M2, LOW);
+  digitalWrite(M3, HIGH);
+  digitalWrite(M4, LOW);
+  Serial.println("ACTION: Rotation Droite");
+}
+
+void loop() {
+  monter();           // Décollage
+  delay(3000);
+
+  rotationGauche();   // Tourner gauche
+  delay(2000);
+
+  monter();           // Remontée
+  delay(1500);
+
+  rotationDroite();   // Tourner droite
+  delay(2000);
+
+  atterrir();         // Atterrissage
+  delay(2000);
+}`;
+
+  navigator.clipboard.writeText(raw).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    const orig = btn.textContent;
+    btn.textContent = '✅ Copié !';
+    btn.style.background = 'var(--green)';
+    btn.style.color = 'var(--navy)';
+    setTimeout(() => { btn.textContent = orig; btn.style.background=''; btn.style.color=''; }, 2000);
+    serialLog('Code Tinkercad copié dans le presse-papier !', 'info');
+  }).catch(() => {
+    alert('Sélectionnez et copiez manuellement le code dans l\'onglet Étape 5.');
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════════════════════════════
+function showTab(name) {
+  ['code','circuit','explain'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t===name ? 'block' : 'none';
+  });
+  document.querySelectorAll('.tab').forEach((el,i) => {
+    el.classList.toggle('active', ['code','circuit','explain'][i]===name);
+  });
+}
+</script>
+</body>
+</html>
